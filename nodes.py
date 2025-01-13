@@ -10,6 +10,35 @@ import os
 import websocket
 import uuid
 
+class SplitImages:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+            },
+        }
+    
+    RETURN_TYPES = ("IMAGE","IMAGE","IMAGE","IMAGE",)
+    FUNCTION = "split"
+    CATEGORY = "ComfyCloudAPIs"
+
+    def split(self, images):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        none = os.path.join(current_dir, "none.png")
+        out_images = []
+        for image in images:
+            out_images.append(image.unsqueeze(0))
+        # load none image
+        with Image.open(none) as img:
+            img = img.convert("RGB")
+            noneimage = np.array(img).astype(np.float32) / 255.0
+            noneimage = torch.from_numpy(noneimage)[None,]
+        # add none images
+        for x in range(4 - len(images)):
+            out_images.append(noneimage)
+        return(out_images[0], out_images[1], out_images[2], out_images[3])
+
 class FalLLaVAAPI:
     @classmethod
     def INPUT_TYPES(cls):
@@ -266,6 +295,7 @@ class FalFluxLoraAPI:
                 "cfg": ("FLOAT", {"default": 3.5, "min": 1, "max": 20, "step": 0.5, "forceInput": False}),
                 "no_downscale": ("BOOLEAN", {"default": False,}),
                 "i2i_strength": ("FLOAT", {"default": 0.90, "min": 0.01, "max": 1, "step": 0.01}),
+                "image_count": ("INT", {"default": 1, "min": 1, "max": 4,}),
             },
             "optional":{
                 "image": ("IMAGE", {"forceInput": True,}),
@@ -276,7 +306,7 @@ class FalFluxLoraAPI:
     FUNCTION = "generate_image"
     CATEGORY = "ComfyCloudAPIs"
 
-    def generate_image(self, loras, prompt, width, height, steps, api_key, seed, cfg, no_downscale, i2i_strength, image=None,):
+    def generate_image(self, loras, prompt, width, height, steps, api_key, seed, cfg, no_downscale, i2i_strength, image_count, image=None,):
         #Set api key
         current_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(os.path.join(current_dir, "keys"), api_key), 'r', encoding='utf-8') as file:
@@ -292,7 +322,7 @@ class FalFluxLoraAPI:
             "guidance_scale": cfg,
             "enable_safety_checker": False,
             "num_inference_steps": steps,
-            "num_images": 1, #Hardcoded to 1 for now
+            "num_images": image_count, #Hardcoded to 1 for now
         }
         loras = json.loads(loras)
         endpoint = "fal-ai/flux-lora"
@@ -325,14 +355,17 @@ class FalFluxLoraAPI:
         full_args.update(loras)
         handler = fal_client.submit(endpoint, arguments= full_args)
         result = handler.get()
-        image_url = result['images'][0]['url']
-        #Download the image
-        response = requests.get(image_url)
-        image = Image.open(io.BytesIO(response.content))
-        #make image more comfy
-        image = np.array(image).astype(np.float32) / 255.0
-        output_image = torch.from_numpy(image)[None,]
-        return (output_image,)
+        
+        #pack images
+        output_images = []
+        for output in range(image_count):
+            image_url = result['images'][output]['url']
+            response = requests.get(image_url)
+            image = Image.open(io.BytesIO(response.content))
+            image = np.array(image).astype(np.float32) / 255.0
+            output_images.append(torch.from_numpy(image))
+        output_images = torch.stack(output_images, dim=0)
+        return (output_images,)
 
 class FalFluxI2IAPI:
     @classmethod
@@ -349,6 +382,7 @@ class FalFluxI2IAPI:
                 "seed": ("INT", {"default": 1337, "min": 1, "max": 16777215}),
                 "cfg": ("FLOAT", {"default": 3.5, "min": 1, "max": 20, "step": 0.5, "forceInput": False}),
                 "no_downscale": ("BOOLEAN", {"default": False,}),
+                "image_count": ("INT", {"default": 1, "min": 1, "max": 4,}),
             },
         }
     
@@ -356,7 +390,7 @@ class FalFluxI2IAPI:
     FUNCTION = "generate_image"
     CATEGORY = "ComfyCloudAPIs"
 
-    def generate_image(self, image, prompt, strength, steps, api_key, seed, cfg, no_downscale):
+    def generate_image(self, image, prompt, strength, steps, api_key, seed, cfg, no_downscale, image_count,):
         #Set api key
         current_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(os.path.join(current_dir, "keys"), api_key), 'r', encoding='utf-8') as file:
@@ -394,17 +428,20 @@ class FalFluxI2IAPI:
             "guidance_scale": cfg,
             "enable_safety_checker": False,
             "num_inference_steps": steps,
-            "num_images": 1, #Hardcoded to 1 for now
+            "num_images": image_count, #Hardcoded to 1 for now
         })
         result = handler.get()
-        image_url = result['images'][0]['url']
-        #Download the image
-        response = requests.get(image_url)
-        image = Image.open(io.BytesIO(response.content))
-        #make image more comfy
-        image = np.array(image).astype(np.float32) / 255.0
-        output_image = torch.from_numpy(image)[None,]
-        return (output_image,)
+
+        #pack images
+        output_images = []
+        for output in range(image_count):
+            image_url = result['images'][output]['url']
+            response = requests.get(image_url)
+            image = Image.open(io.BytesIO(response.content))
+            image = np.array(image).astype(np.float32) / 255.0
+            output_images.append(torch.from_numpy(image))
+        output_images = torch.stack(output_images, dim=0)
+        return (output_images,)
 
 class FluxResolutionPresets:
     @classmethod
@@ -556,6 +593,7 @@ class FalFluxAPI:
                 "api_key": (api_keys,),
                 "seed": ("INT", {"default": 1337, "min": 1, "max": 16777215}),
                 "cfg_dev_and_pro": ("FLOAT", {"default": 3.5, "min": 0, "max": 20, "step": 0.5, "forceInput": False}),
+                "image_count": ("INT", {"default": 1, "min": 1, "max": 4,}),
             },
         }
     
@@ -563,7 +601,7 @@ class FalFluxAPI:
     FUNCTION = "generate_image"
     CATEGORY = "ComfyCloudAPIs"
 
-    def generate_image(self, prompt, endpoint, width, height, steps, api_key, seed, cfg_dev_and_pro):
+    def generate_image(self, prompt, endpoint, width, height, steps, api_key, seed, cfg_dev_and_pro, image_count):
         #prevent too many steps error
         if endpoint == "schnell (4+ steps)" and steps > 8:
             steps = 8
@@ -593,17 +631,20 @@ class FalFluxAPI:
             },
             "num_inference_steps": steps,
             "enable_safety_checker": False,
-            "num_images": 1,}  #Hardcoded to 1 for now
+            "num_images": image_count,}  #Hardcoded to 1 for now
         )
         result = handler.get()
-        image_url = result['images'][0]['url']
-        #Download the image
-        response = requests.get(image_url)
-        image = Image.open(io.BytesIO(response.content))
-        #make image more comfy
-        image = np.array(image).astype(np.float32) / 255.0
-        output_image = torch.from_numpy(image)[None,]
-        return (output_image,)
+        
+        #pack images
+        output_images = []
+        for output in range(image_count):
+            image_url = result['images'][output]['url']
+            response = requests.get(image_url)
+            image = Image.open(io.BytesIO(response.content))
+            image = np.array(image).astype(np.float32) / 255.0
+            output_images.append(torch.from_numpy(image))
+        output_images = torch.stack(output_images, dim=0)
+        return (output_images,)
 
 class ReplicateFluxAPI:
     @classmethod
@@ -672,6 +713,7 @@ NODE_CLASS_MAPPINGS = {
     "FalAddLora": FalAddLora,
     "RunWareAPI": RunWareAPI,
     "RunwareAddLora": RunwareAddLora,
+    "SplitImages": SplitImages,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -686,4 +728,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FalAddLora": "FalAddLora",
     "RunWareAPI": "RunWareAPI",
     "RunwareAddLora": "RunwareAddLora",
+    "SplitImages": "SplitImages",
 }
