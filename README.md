@@ -1,6 +1,12 @@
 # ComfyUI-Cloud-APIs
-I wanted to use some larger models in my local ComfyUI workflows but I'm too gpu poor. Currently model support is limited but I'll add more when I find the time.
+I have modified the existing ComfyUI-Cloud-APIs to support superior and faster generations with cost-effective offerings from Nebius AI, allowing you to use larger models in your local ComfyUI workflows despite GPU limitations. Currently, model support is limited, but we will add more models as time permits.
 # Supported Models:
+We recommend using the **Nebius** models for their superior performance and efficiency:
+- **NebiusFluxDevAPI**
+- **NebiusFluxSchnellAPI**
+- **NebiusSdxlAPI**
+
+Additionally, the following models are supported:
 - Flux t2i (fal, replicate, runware)
 - Flux i2i (fal)
 - Flux w/loras and i2i (fal)
@@ -14,6 +20,14 @@ I wanted to use some larger models in my local ComfyUI workflows but I'm too gpu
 # Quick Setup
 1. Install extension and dependencies (preferably with comfy manager)
 2. Place your api key/token in a text file in ComfyUI-Cloud-APIs/keys
+
+# Nebius Quick Setup
+1. Install the extension with the "Install via Git URL" option in comfyUI manager
+2. Create an account at [Nebius AI Studio](https://studio.nebius.ai/)
+3. Follow th instructions at [API Keys](https://docs.nebius.com/studio/inference/api#images-generations)
+4. Copy the API key in your ComfyUI folder `/Users/kiran/Desktop/ComfyUI/custom_nodes/ComfyUI-Cloud-APIs/keys` into a text file. (there is a placeholder nokey.txt file which you can delete or use the same file)
+5. Consult the [models](https://studio.nebius.ai/models/text2image) page to get an idea of how much each generation will cost, you do get 1$ worth of free credit when you sign up which is enough for multiple test generations.
+   
 # Step by step setup (Fal)
 1. Install the extension with the "Install via Git URL" option in comfyUI manager
 2. Create an account at [fal.ai](https://fal.ai/)
