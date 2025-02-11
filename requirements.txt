@@ -5,3 +5,4 @@ numpy
 pillow
 websocket-client
 uuid
+openai>=1.0.0

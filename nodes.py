@@ -9,6 +9,7 @@ import io
 import os
 import websocket
 import uuid
+from openai import OpenAI
 
 class SplitImages:
     @classmethod
@@ -700,6 +701,63 @@ class ReplicateFluxAPI:
         output_image = torch.from_numpy(image)[None,]
         return (output_image,)
 
+class NebiusFluxAPI:
+    @classmethod
+    def INPUT_TYPES(cls):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        api_keys = [f for f in os.listdir(os.path.join(current_dir, "keys")) if f.endswith('.txt')]
+        return {
+            "required": {
+                "prompt": ("STRING", {"multiline": True}),
+                "negative_prompt": ("STRING", {"multiline": True, "default": ""}),
+                "width": ("INT", {"default": 1024, "min": 256, "max": 2048, "step": 16}),
+                "height": ("INT", {"default": 1024, "min": 256, "max": 2048, "step": 16}),
+                "steps": ("INT", {"default": 28, "min": 1, "max": 50}),
+                "api_key": (api_keys,),
+                "seed": ("INT", {"default": -1, "min": -1, "max": 16777215}),
+            },
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "generate_image"
+    CATEGORY = "ComfyCloudAPIs"
+
+    def generate_image(self, prompt, negative_prompt, width, height, steps, api_key, seed):
+        # Set api key
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(os.path.join(current_dir, "keys"), api_key), 'r', encoding='utf-8') as file:
+            key = file.read()
+        
+        client = OpenAI(
+            base_url="https://api.studio.nebius.ai/v1/",
+            api_key=key
+        )
+
+        response = client.images.generate(
+            model="black-forest-labs/flux-dev",
+            response_format="b64_json",
+            extra_body={
+                "response_extension": "webp",
+                "width": width,
+                "height": height,
+                "num_inference_steps": steps,
+                "negative_prompt": negative_prompt,
+                "seed": seed
+            },
+            prompt=prompt
+        )
+
+        # Convert base64 to image
+        import base64
+        image_data = base64.b64decode(response.data[0].b64_json)
+        image = Image.open(io.BytesIO(image_data))
+        
+        # Convert to ComfyUI format
+        image = np.array(image).astype(np.float32) / 255.0
+        output_image = torch.from_numpy(image)[None,]
+        
+        return (output_image,)
+
 NODE_CLASS_MAPPINGS = {
     "FalFluxAPI": FalFluxAPI,
     "ReplicateFluxAPI": ReplicateFluxAPI,
@@ -714,6 +772,7 @@ NODE_CLASS_MAPPINGS = {
     "RunWareAPI": RunWareAPI,
     "RunwareAddLora": RunwareAddLora,
     "SplitImages": SplitImages,
+    "NebiusFluxAPI": NebiusFluxAPI,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -729,4 +788,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RunWareAPI": "RunWareAPI",
     "RunwareAddLora": "RunwareAddLora",
     "SplitImages": "SplitImages",
+    "NebiusFluxAPI": "NebiusFluxAPI",
 }
